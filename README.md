@@ -44,6 +44,7 @@ NOTION_PAGE_ID = ""
   ```shell
   ./run.sh
   ```
+* Initial run will require 2FA with the Microsoft Authenticator App, check termianal output for the 2FA Code
 
 ### Step 3
 
