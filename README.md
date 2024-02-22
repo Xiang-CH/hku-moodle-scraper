@@ -1,13 +1,13 @@
 # HKU Moodle Events to Notion Database
 
 This scrapper script retreives user's HKU Moodle Events (Assignments Deadlines), and auto update the events on a Notion Database.
+
 <div display="inline">
   <img width="40%" alt="MoodleEvent" src="https://github.com/Xiang-CH/HKU_Moodle_Event_to_Notion_Database/assets/63144890/6df25534-a823-485e-9993-ddcb2defc8bf">
   <span>:arrow_right:</span>
    <img width="55%" alt="NotionDB" src="image/README/1708618894109.png">
 </div>
 
-  
 ### Step 1
 
 Create an .env file and fill in your **HKU email** and **Portal PIN number**. You will also need your **Notion Token** and The **Notion Page ID** depending on where you want to place the database
@@ -34,8 +34,8 @@ NOTION_PAGE_ID = ""
 <img src="image/README/1708617434380.png" width="49%"/>
 </div>
 
-  * E.g. The page_id of https://www.notion.so/chen-xiang/Test-fd292c99909f46e3b5ad3c3164a9213b?pvs=4 is **fd292c99909f46e3b5ad3c3164a9213b**
-  * Also remember to Connect your page to your intergration
+* E.g. The page_id of https://www.notion.so/chen-xiang/Test-fd292c99909f46e3b5ad3c3164a9213b?pvs=4 is **fd292c99909f46e3b5ad3c3164a9213b**
+* Also remember to Connect your page to your intergration
 
 ### Step 2
 
@@ -44,3 +44,10 @@ NOTION_PAGE_ID = ""
   ```shell
   ./run.sh
   ```
+
+### Step 3
+
+1. Auto schedual script run using crontab
+2. Open crontab by entering  `crontab -e` in terminal
+3. Add `0 0 * * * /path/to/directory/run.sh` to tje crontab file
+4. Write and Quit
