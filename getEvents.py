@@ -56,6 +56,7 @@ def moodle_html(headless = True):
 
         print("logging in")
 
+        page.wait_for_selector('a:has-text("HKU Portal user login"), h1.portal-title')
         if ("moodle.hku.hk" in page.url):
             page.click('a:has-text("HKU Portal user login")')
         page.fill('input[name="email"]', USERNAME)
