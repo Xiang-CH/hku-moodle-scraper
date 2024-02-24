@@ -57,7 +57,7 @@ def get_db(notion):
     filter_params = {
         "property": "Due Date",
         "date": {
-            "after": datetime.now().isoformat()
+            "on_or_after": datetime.now(pytz.timezone("Asia/Shanghai")).isoformat()
         }
     }
     try:

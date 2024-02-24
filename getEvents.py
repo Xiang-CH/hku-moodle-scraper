@@ -8,6 +8,8 @@ dotenv.load_dotenv()
 URL = "https://moodle.hku.hk/"
 USERNAME = os.getenv("EMAIL")
 PASSWORD = os.getenv("PORTAL_PIN")
+browserStatePath = storage_state=os.getcwd() + "/state.json"
+# print(browserStatePath)
 
 def check_if_logged_in(page, context):
     pg_data = page.inner_html("html")
@@ -20,17 +22,18 @@ def check_if_logged_in(page, context):
         print("On dashboard page")
         page.wait_for_selector('div[data-region="event-list-loading-placeholder"]', state="hidden")
         pg_data = page.inner_html('div[data-region="event-list-content"]')
-        context.storage_state(path="state.json")
+        context.storage_state(path=browserStatePath)
         return BeautifulSoup(pg_data, 'html.parser')
     return None
 
-def moodle_html():
+def moodle_html(headless = True):
     with sync_playwright() as p:
         # launch browser context
-        browser = p.chromium.launch(headless=True)
+        browser = p.chromium.launch(headless=headless)
         try:
-            context = browser.new_context(storage_state="state.json")
-        except:
+            context = browser.new_context(storage_state=browserStatePath)
+        except FileNotFoundError as e:
+            print(e)
             context = browser.new_context()
         # Open new page and go to moodle
         page = context.new_page()
@@ -52,7 +55,9 @@ def moodle_html():
             return timeline
 
         print("logging in")
-        page.click('a:has-text("HKU Portal user login")')
+
+        if ("moodle.hku.hk" in page.url):
+            page.click('a:has-text("HKU Portal user login")')
         page.fill('input[name="email"]', USERNAME)
         page.click('input:has-text("LOG IN")')
 
@@ -77,8 +82,8 @@ def moodle_html():
         # Moodle loaded
         return check_if_logged_in(page, context)
 
-def get_moodle_dealines():
-    soup = moodle_html()
+def get_moodle_dealines(headless = True):
+    soup = moodle_html(headless)
     dealines = []
     dates = soup.find_all("div", {'data-region': 'event-list-content-date'})
     events = soup.find_all("div", {'data-region': 'event-list-item'})
@@ -106,4 +111,4 @@ def get_moodle_dealines():
         
 
 if __name__ == "__main__":
-    print(get_moodle_dealines())
+    print(get_moodle_dealines(headless=False))
