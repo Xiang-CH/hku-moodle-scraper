@@ -87,16 +87,21 @@ def moodle_html(headless = True):
 def get_moodle_dealines(headless = True):
     soup = moodle_html(headless)
     dealines = []
-    events = soup.find_all("div", {'data-region': 'event-list-item'})
+    events = soup.find_all(lambda tag: tag.name == 'div' and
+                            ('data-region' in tag.attrs and tag['data-region'] == 'event-list-content-date' or
+                            'data-region' in tag.attrs and tag['data-region'] == 'event-list-item'))
 
-    for i in range(len(events)):
-        date = events[i].parent.parent.parent.find("div", {'data-region': 'event-list-content-date'})
-        time_stamp = int(date.attrs['data-timestamp'])
-        due_time = events[i].select('small.text-right.text-nowrap.pull-right')[0].text.strip()
-        # time_diff = events[i].select('small.text-right.text-nowrap.pull-right')[0].text.split(":")
+    time_stamp = 0
+    for event in events:
+        if event['data-region'] == 'event-list-content-date':
+            time_stamp = int(event.attrs['data-timestamp'])
+            continue
+
+        due_time = event.select('small.text-right.text-nowrap.pull-right')[0].text.strip()
+        # time_diff = event.select('small.text-right.text-nowrap.pull-right')[0].text.split(":")
         # time_stamp += int(time_diff[0]) * 3600 + int(time_diff[1]) * 60
 
-        event_ = events[i].find('a')
+        event_ = event.find('a')
         link = event_.attrs['href']
         id = link.split("?id=")[1]
         title = event_.attrs['title']
