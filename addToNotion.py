@@ -71,15 +71,18 @@ def get_db(notion):
 
 
 def event_to_notion_page_properties(event):
+    title = event["title"].split('is due')[0].strip()
+    if not "Due" in title and not "Deadline" in title:
+        title += " (Due: " + event["due_time"]+ ")"
     return {
         "Title": {
             "title": [
                 {"text": {
-                    "content": event["title"].split('is due')[0].strip()
+                    "content": title
                 }}
             ]
         },
-        "Due Date": {"date": {"start": datetime.fromtimestamp(event["time_stamp"], pytz.timezone(zone='Asia/Shanghai')).isoformat()}},
+        "Due Date": {"date": {"start": datetime.fromtimestamp(event["time_stamp"], pytz.timezone(zone='Asia/Shanghai')).date().isoformat()}},
         "Course Code": {"select": {"name": event["course"].split(" ")[0]}},
         "Course": {"rich_text": [{
             "type": "text",

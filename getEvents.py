@@ -2,6 +2,7 @@ import dotenv
 import os
 from bs4 import BeautifulSoup
 from playwright.sync_api import sync_playwright
+from pprint import pprint
 
 dotenv.load_dotenv()
 
@@ -86,13 +87,14 @@ def moodle_html(headless = True):
 def get_moodle_dealines(headless = True):
     soup = moodle_html(headless)
     dealines = []
-    dates = soup.find_all("div", {'data-region': 'event-list-content-date'})
     events = soup.find_all("div", {'data-region': 'event-list-item'})
 
-    for i in range(len(dates)):
-        time_stamp = int(dates[i].attrs['data-timestamp'])
-        time_diff = events[i].select('small.text-right.text-nowrap.pull-right')[0].text.split(":")
-        time_stamp += int(time_diff[0]) * 3600 + int(time_diff[1]) * 60
+    for i in range(len(events)):
+        date = events[i].parent.parent.parent.find("div", {'data-region': 'event-list-content-date'})
+        time_stamp = int(date.attrs['data-timestamp'])
+        due_time = events[i].select('small.text-right.text-nowrap.pull-right')[0].text.strip()
+        # time_diff = events[i].select('small.text-right.text-nowrap.pull-right')[0].text.split(":")
+        # time_stamp += int(time_diff[0]) * 3600 + int(time_diff[1]) * 60
 
         event_ = events[i].find('a')
         link = event_.attrs['href']
@@ -104,7 +106,8 @@ def get_moodle_dealines(headless = True):
             "time_stamp": time_stamp,
             "link": link,
             "title": title,
-            "course": course
+            "course": course,
+            "due_time": due_time
         })
 
     return dealines
@@ -112,4 +115,4 @@ def get_moodle_dealines(headless = True):
         
 
 if __name__ == "__main__":
-    print(get_moodle_dealines(headless=False))
+    pprint(get_moodle_dealines(headless=False))
