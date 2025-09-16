@@ -1,90 +1,106 @@
 import dotenv
 import os
 from bs4 import BeautifulSoup
-from playwright.sync_api import sync_playwright
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.chrome.options import Options
+from selenium.common.exceptions import TimeoutException, NoSuchElementException
 from pprint import pprint
+import json
 
 dotenv.load_dotenv()
 
 URL = "https://moodle.hku.hk/"
 USERNAME = os.getenv("EMAIL")
 PASSWORD = os.getenv("PORTAL_PIN")
-browserStatePath = storage_state=os.getcwd() + "/state.json"
-# print(browserStatePath)
+browserStatePath = os.getcwd() + "/state.json"
 
-def check_if_logged_in(page, context):
-    pg_data = page.inner_html("html")
-    soup = BeautifulSoup(pg_data, 'html.parser')
-    if soup.find(id="loggedin-user") != None:
-        print("Already logged in")
-        page.wait_for_selector('h2:has-text("My courses")')
-        page.goto(URL + "my/")
-        # page.click('span:has-text("Dashboard")')
+def save_session_state(driver, path):
+    state = {
+        'cookies': driver.get_cookies(),
+    }
+    with open(path, 'w') as file:
+        json.dump(state, file)
+
+def load_session_state(driver, path):
+    try:
+        with open(path, 'r') as file:
+            state = json.load(file)
+
+        # Clear existing cookies and storage
+        driver.delete_all_cookies()
+            
+        # Load cookies
+        for cookie in state.get('cookies', []):
+            driver.add_cookie(cookie)
+            
+        return True
+    except (FileNotFoundError, Exception) as e:
+        # print(e)
+        return False
+
+def check_if_logged_in(driver):
+    try:
+        WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.XPATH, '//h2[contains(text(), "My courses")]'))
+        )
+        driver.get(URL + "my/")
         print("On dashboard page")
-        page.wait_for_selector('div[data-region="event-list-loading-placeholder"]', state="hidden")
-        pg_data = page.inner_html('div[data-region="event-list-content"]')
-        context.storage_state(path=browserStatePath)
+        WebDriverWait(driver, 10).until(
+            EC.invisibility_of_element_located((By.CSS_SELECTOR, 'div[data-region="event-list-loading-placeholder"]'))
+        )
+        pg_data = driver.find_element(By.CSS_SELECTOR, 'div[data-region="event-list-content"]').get_attribute('innerHTML')
+        print("Login verification successful")
+        save_session_state(driver, browserStatePath)
         return BeautifulSoup(pg_data, 'html.parser')
-    return None
+    except (NoSuchElementException, TimeoutException):
+        return None
 
-def moodle_html(headless = True):
-    with sync_playwright() as p:
-        # launch browser context
-        browser = p.chromium.launch(headless=headless)
-        try:
-            context = browser.new_context(storage_state=browserStatePath)
-        except FileNotFoundError as e:
-            print(e)
-            context = browser.new_context()
-        # Open new page and go to moodle
-        page = context.new_page()
-        page.goto(URL)
+def moodle_html(headless=False):
+    options = Options()
+    if headless:
+        options.add_argument("--headless")
+
+    driver = webdriver.Chrome(options=options)
+    
+    try:
+        driver.get(URL)
+        if not load_session_state(driver, browserStatePath):
+            print("No session state found")
+        else:
+            print("Session state loaded")
+
+        # Refresh page to load session
+        driver.refresh()
         print("Opened moodle")
 
         # Check if user is already logged in
-        timeline = check_if_logged_in(page, context)
-        if timeline != None:
+        timeline = check_if_logged_in(driver)
+        print(timeline)
+
+        if timeline is not None:
             return timeline
 
+        # Let user login manually
+        print("Please login manually in the browser window...")
+        print("Press Enter after you have successfully logged in and can see the dashboard")
+        input()
         
-        # If not logged in, login
-        page.click('a:has-text("login")')
-
-        # Check if jumped to moodle
-        timeline = check_if_logged_in(page, context)
-        if timeline != None:
+        # Check if logged in and get timeline
+        timeline = check_if_logged_in(driver)
+        if timeline is not None:
             return timeline
+        else:
+            print("Login verification failed. Please try again.")
+            return None
+    
+    finally:
+        # input("Press Enter to close browser...")
+        driver.quit()
 
-        print("logging in")
-
-        page.wait_for_selector('a:has-text("HKU Portal user login"), h1.portal-title')
-        if ("moodle.hku.hk" in page.url):
-            page.click('a:has-text("HKU Portal user login")')
-        page.fill('input[name="email"]', USERNAME)
-        page.click('input:has-text("LOG IN")')
-
-        # Check if user is already logged in
-        timeline = check_if_logged_in(page, context)
-        if timeline != None:
-            return timeline
-        
-        # If not, input password for microsoft login
-        print("On microsoft login page")
-        page.fill('input#passwordInput', PASSWORD)
-        page.click('span#submitButton')
-
-        # Display 2fa code
-        print("Waiting for 2fa code")
-        auth_code = page.inner_html('div#idRichContext_DisplaySign')
-        print(f"auth_code: {auth_code}")
-        print(page.url)
-        if "microsoftonline" in page.url:
-            page.click('input#idSIButton9')
-
-        # Moodle loaded
-        return check_if_logged_in(page, context)
-
-def get_moodle_dealines(headless = True):
+def get_moodle_dealines(headless=True):
     soup = moodle_html(headless)
     dealines = []
     events = soup.find_all(lambda tag: tag.name == 'div' and
@@ -97,15 +113,14 @@ def get_moodle_dealines(headless = True):
             time_stamp = int(event.attrs['data-timestamp'])
             continue
 
-        due_time = event.select('small.text-right.text-nowrap.pull-right')[0].text.strip()
-        # time_diff = event.select('small.text-right.text-nowrap.pull-right')[0].text.split(":")
-        # time_stamp += int(time_diff[0]) * 3600 + int(time_diff[1]) * 60
+        due_time = event.select('small')[0].text.strip()
+
 
         event_ = event.find('a')
         link = event_.attrs['href']
         id = link.split("?id=")[1]
-        title = event_.attrs['title']
-        course = event_.find('small').text
+        title = event_.text.strip()
+        course = event.select('small')[1].text.split("·")[1].strip()
         dealines.append({
             "id": id,
             "time_stamp": time_stamp,
@@ -116,8 +131,6 @@ def get_moodle_dealines(headless = True):
         })
 
     return dealines
-
-        
 
 if __name__ == "__main__":
     pprint(get_moodle_dealines(headless=False))

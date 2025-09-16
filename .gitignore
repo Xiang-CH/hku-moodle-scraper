@@ -3,6 +3,8 @@ playwright/.auth
 state.json
 .env
 
+.DS_Store
+
 venv/
 venv/*
 

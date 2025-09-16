@@ -114,7 +114,7 @@ def main():
     notion = Client(auth=os.getenv("NOTION_TOKEN"))
     db = get_db(notion)
     exit_event_urls = [] if db == None else [obj["properties"]["Link"]["url"] for obj in db['results']]
-    events = get_moodle_dealines()
+    events = get_moodle_dealines(headless=True)
     for event in events:
         if event["link"] in exit_event_urls:
             continue
