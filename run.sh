@@ -13,5 +13,4 @@ if [ $? -ne 0 ]; then
     echo "Failed to restore backend python packages"
     exit $?
 fi
-
 python addToNotion.py
