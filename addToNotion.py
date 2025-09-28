@@ -3,10 +3,19 @@ import os
 from notion_client import Client, APIResponseError
 from pprint import pprint
 import logging
-from getEvents import get_moodle_dealines
+from getEvents_ import get_moodle_dealines
 from datetime import datetime
 import pytz
 
+import argparse
+import sys
+from typing import Any, Dict, List, Optional
+
+# Configure logging early
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s - %(message)s",
+)
 dotenv.load_dotenv()
 DB_ID = os.getenv("NOTION_DATABASE_ID")
 
@@ -70,7 +79,7 @@ def get_db(notion):
 		logging.error(error)
 
 
-def event_to_notion_page_properties(event):
+def event_to_notion_page_properties(event: Dict[str, Any]) -> Dict[str, Any]:
 	title = event["title"].split('is due')[0].strip()
 	if not "Due" in title and not "Deadline" in title:
 		title += " (Due: " + event["due_time"]+ ")"
@@ -110,18 +119,59 @@ def add_to_notion(event, notion):
 		logging.error(error)
 
 
-def main():
-	notion = Client(auth=os.getenv("NOTION_TOKEN"))
+def parse_args() -> argparse.Namespace:
+	parser = argparse.ArgumentParser(description="Fetch Moodle deadlines and add them to a Notion database.")
+	group = parser.add_mutually_exclusive_group()
+	group.add_argument(
+		"--headless",
+		dest="headless",
+		action="store_true",
+		help="Run browser in headless mode (default).",
+	)
+	parser.set_defaults(headless=False)
+	return parser.parse_args()
+
+
+def main() -> int:
+	args = parse_args()
+	headless = args.headless
+
+	notion_token = os.getenv("NOTION_TOKEN")
+	if not notion_token:
+		logging.error("NOTION_TOKEN is not set. Please set it in your environment or .env file.")
+		return 1
+
+	notion = Client(auth=notion_token)
+
+	# Fetch existing DB to dedupe by Link URL
 	db = get_db(notion)
-	exit_event_urls = [] if db == None else [obj["properties"]["Link"]["url"] for obj in db['results']]
-	events = get_moodle_dealines(headless=True)
+	exit_event_urls = [] if db is None else [obj["properties"]["Link"]["url"] for obj in db.get('results', [])]
+
+	# Fetch Moodle deadlines
+	try:
+		events = get_moodle_dealines(headless=headless)
+	except Exception as e:
+		logging.error("Failed to fetch Moodle deadlines: %s", e)
+		if headless:
+			logging.info("If your Moodle session expired, re-run with --no-headless to login manually.")
+		return 1
+
+	if not events:
+		logging.info("No events found to add.")
+		return 0
+
+	# Add new events only
+	added_count = 0
 	for event in events:
-		if event["link"] in exit_event_urls:
+		if event.get("link") in exit_event_urls:
 			continue
 		add_to_notion(event, notion)
-		print(f"{event['title']} added to Notion.")
-		# pprint(property)
+		logging.info("Added to Notion: %s", event.get("title"))
+		added_count += 1
+
+	logging.info("Completed. %d new event(s) added.", added_count)
+	return 0
 
 
 if __name__ == "__main__":
-	main()
+	sys.exit(main())

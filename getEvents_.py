@@ -43,12 +43,12 @@ def load_session_state(driver, path):
 
 def check_if_logged_in(driver):
 	try:
-		WebDriverWait(driver, 5).until(
+		WebDriverWait(driver, 10).until(
 			EC.presence_of_element_located((By.XPATH, '//h2[contains(text(), "My courses")]'))
 		)
 		driver.get(URL + "my/")
 		print("On dashboard page")
-		WebDriverWait(driver, 5).until(
+		WebDriverWait(driver, 10).until(
 			EC.invisibility_of_element_located((By.CSS_SELECTOR, 'div[data-region="event-list-loading-placeholder"]'))
 		)
 		pg_data = driver.find_element(By.CSS_SELECTOR, 'div[data-region="event-list-content"]').get_attribute('innerHTML')
@@ -78,31 +78,18 @@ def moodle_html(headless=False):
 
 		# Check if user is already logged in
 		timeline = check_if_logged_in(driver)
+		print(timeline)
 
-		if not timeline:
-			driver.get("https://moodle.hku.hk/login/index.php?authCAS=CAS")
-		else:
+		if timeline is not None:
 			return timeline
 
-		while driver.current_url != URL:
-			if driver.current_url == "https://hkuportal.hku.hk/cas/aad":
-				WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "login_btn")))
-				driver.find_element(By.ID, "email").send_keys(USERNAME)
-				driver.find_element(By.ID, "login_btn").click()
-				# WebDriverWait(driver, 10).until(EC.url_contains("adfs.connect.hku.hk"))
-			elif "adfs.connect.hku.hk" in driver.current_url:
-				WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "passwordInput")))
-				driver.find_element(By.ID, "passwordInput").send_keys(PASSWORD)
-				driver.find_element(By.ID, "submitButton").click()
-			elif "login.microsoftonline.com" in driver.current_url:
-				WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "idSIButton9")))
-				driver.find_element(By.ID, "idSIButton9").click()
-			else:
-				print("Unknown page, please login manually if not redirected to Moodle")
-				if headless:
-					raise Exception("Login expired!")
-				print("Press Enter after you have successfully logged in and can see the dashboard")
-				input()
+		if headless:
+			raise Exception("Login expired!")
+
+		# Let user login manually
+		print("Please login manually in the browser window...")
+		print("Press Enter after you have successfully logged in and can see the dashboard")
+		input()
 		
 		# Check if logged in and get timeline
 		timeline = check_if_logged_in(driver)
@@ -111,10 +98,9 @@ def moodle_html(headless=False):
 		else:
 			print("Login verification failed. Please try again.")
 			return None
-	except Exception as e:
-		print("Error occurred:", e)
-		if not headless: input("Press Enter to close browser...")
+	
 	finally:
+		# input("Press Enter to close browser...")
 		driver.quit()
 
 def get_moodle_dealines(headless=True):
@@ -150,4 +136,4 @@ def get_moodle_dealines(headless=True):
 	return dealines
 
 if __name__ == "__main__":
-	pprint(get_moodle_dealines(headless=False))
+	pprint(get_moodle_dealines(headless=True))
