@@ -3,13 +3,13 @@ import os
 from notion_client import Client, APIResponseError
 from pprint import pprint
 import logging
-from getEvents_ import get_moodle_dealines
+from getEvents import get_moodle_dealines
 from datetime import datetime
 import pytz
 
 import argparse
 import sys
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 
 # Configure logging early
 logging.basicConfig(
@@ -153,7 +153,7 @@ def main() -> int:
 	except Exception as e:
 		logging.error("Failed to fetch Moodle deadlines: %s", e)
 		if headless:
-			logging.info("If your Moodle session expired, re-run with --no-headless to login manually.")
+			logging.info("If your Moodle session expired, re-run without headless mode to login manually.")
 		return 1
 
 	if not events:

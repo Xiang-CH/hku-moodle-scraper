@@ -98,7 +98,7 @@ def moodle_html(headless=False):
 				WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "idSIButton9")))
 				driver.find_element(By.ID, "idSIButton9").click()
 			else:
-				print("Unknown page, please login manually if not redirected to Moodle")
+				print(f"Unknown page ({driver.current_url}), please login manually if not redirected to Moodle")
 				if headless:
 					raise Exception("Login expired!")
 				print("Press Enter after you have successfully logged in and can see the dashboard")
