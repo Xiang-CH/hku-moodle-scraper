@@ -3,7 +3,7 @@ import os
 from notion_client import Client, APIResponseError
 from pprint import pprint
 import logging
-from getEvents import get_moodle_dealines
+from getEvents import get_moodle_deadlines
 from datetime import datetime
 import pytz
 
@@ -149,7 +149,7 @@ def main() -> int:
 
 	# Fetch Moodle deadlines
 	try:
-		events = get_moodle_dealines(headless=headless)
+		events = get_moodle_deadlines(headless=headless)
 	except Exception as e:
 		logging.error("Failed to fetch Moodle deadlines: %s", e)
 		if headless:

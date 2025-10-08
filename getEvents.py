@@ -6,92 +6,125 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
-from selenium.common.exceptions import TimeoutException, NoSuchElementException
+from selenium.common.exceptions import TimeoutException, NoSuchElementException, StaleElementReferenceException
+import time
 from pprint import pprint
 import json
 
 dotenv.load_dotenv()
 
-URL = "https://moodle.hku.hk/"
+URL = "https://moodle.hku.hk"
 USERNAME = os.getenv("EMAIL")
 PASSWORD = os.getenv("PORTAL_PIN")
 browserStatePath = os.getcwd() + "/state.json"
 
 
-def check_if_logged_in(driver):
-	try:
-		WebDriverWait(driver, 5).until(
-			EC.presence_of_element_located((By.XPATH, '//h2[contains(text(), "My courses")]'))
-		)
-		driver.get(URL + "my/")
-		print("On dashboard page")
-		WebDriverWait(driver, 5).until(
-			EC.invisibility_of_element_located((By.CSS_SELECTOR, 'div[data-region="event-list-loading-placeholder"]'))
-		)
-		pg_data = driver.find_element(By.CSS_SELECTOR, 'div[data-region="event-list-content"]').get_attribute('innerHTML')
-		print("Login verification successful")
-		return BeautifulSoup(pg_data, 'html.parser')
-	except (NoSuchElementException, TimeoutException):
-		return None
+def wait_and_click(driver, by, selector, timeout=10, attempts=3, pause=0.2):
+	"""Wait until locator is clickable then click, retrying on stale element."""
+	for attempt in range(attempts):
+		try:
+			WebDriverWait(driver, timeout).until(EC.element_to_be_clickable((by, selector)))
+			driver.find_element(by, selector).click()
+			return
+		except StaleElementReferenceException:
+			if attempt == attempts - 1:
+				raise
+			time.sleep(pause)
+
+
+def wait_and_send_keys(driver, by, selector, value, timeout=10, attempts=3, pause=0.2):
+	"""Wait until locator is present then send keys, retrying on stale element."""
+	for attempt in range(attempts):
+		try:
+			WebDriverWait(driver, timeout).until(EC.presence_of_element_located((by, selector)))
+			el = driver.find_element(by, selector)
+			try:
+				el.clear()
+			except Exception:
+				# some inputs don't support clear(); ignore
+				pass
+			el.send_keys(value)
+			return
+		except StaleElementReferenceException:
+			if attempt == attempts - 1:
+				raise
+			time.sleep(pause)
+
+
+def get_timeline(driver):
+	driver.get(URL + "/my/")
+	print("On dashboard page")
+	WebDriverWait(driver, 5).until(
+		EC.invisibility_of_element_located((By.CSS_SELECTOR, 'div[data-region="event-list-loading-placeholder"]'))
+	)
+	pg_data = driver.find_element(By.CSS_SELECTOR, 'div[data-region="event-list-content"]').get_attribute('innerHTML')
+	print("Login verification successful")
+	return BeautifulSoup(pg_data, 'html.parser')
 
 def moodle_html(headless=False):
 	options = Options()
 	if headless:
 		options.add_argument("--headless")
-	options.add_argument("--user-data-dir=broswer-data")
+	options.add_argument("--user-data-dir=browser-data")
 	driver = webdriver.Chrome(options=options)
 	
 	try:
-		driver.get(URL)
+		driver.get(URL + "/login/index.php?authCAS=CAS")
 
 		# Refresh page to load session
-		driver.refresh()
+		# driver.refresh()
 		print("Opened moodle")
 
-		# Check if user is already logged in
-		timeline = check_if_logged_in(driver)
-
-		if not timeline:
-			driver.get("https://moodle.hku.hk/login/index.php?authCAS=CAS")
-		else:
-			return timeline
-
-		while driver.current_url != URL:
-			if driver.current_url == "https://hkuportal.hku.hk/cas/aad":
-				WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "login_btn")))
-				driver.find_element(By.ID, "email").send_keys(USERNAME)
-				driver.find_element(By.ID, "login_btn").click()
-				# WebDriverWait(driver, 10).until(EC.url_contains("adfs.connect.hku.hk"))
-			elif "adfs.connect.hku.hk" in driver.current_url:
-				WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "passwordInput")))
-				driver.find_element(By.ID, "passwordInput").send_keys(PASSWORD)
-				driver.find_element(By.ID, "submitButton").click()
-			elif "login.microsoftonline.com" in driver.current_url:
-				WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.ID, "idSIButton9")))
-				driver.find_element(By.ID, "idSIButton9").click()
+		# wait for redirect to Moodle, but avoid infinite loop
+		start = time.time()
+		LOGIN_TIMEOUT = 60
+		while not driver.current_url.startswith(URL):
+			if time.time() - start > LOGIN_TIMEOUT:
+				raise TimeoutException("Timed out waiting for Moodle redirect during login")
+			# Use domain checks and robust re-find/click/send_keys helpers
+			cur = driver.current_url
+			if "hkuportal.hku.hk" in cur or "cas" in cur:
+				# AAD / portal page
+				print("On AAD page")
+				wait_and_send_keys(driver, By.ID, "email", USERNAME, timeout=10)
+				wait_and_click(driver, By.ID, "login_btn", timeout=10)
+			elif "adfs.connect.hku.hk" in cur:
+				print("On ADFS page")
+				wait_and_send_keys(driver, By.ID, "passwordInput", PASSWORD, timeout=10)
+				wait_and_click(driver, By.ID, "submitButton", timeout=10)
+				time.sleep(1) # wait for possible redirect
+			elif "login.microsoftonline.com" in cur:
+				print("On Microsoft login page")
+				wait_and_click(driver, By.ID, "idSIButton9", timeout=10)
+				time.sleep(1) # wait for possible redirect
 			else:
-				print(f"Unknown page ({driver.current_url}), please login manually if not redirected to Moodle")
+				if driver.current_url.startswith(URL):
+					break
+				# Unknown page, ask user to login manually if interactive
+				print(f"Unknown page ({cur}), please login manually if not redirected to Moodle")
 				if headless:
-					raise Exception("Login expired!")
+					raise Exception("Login expired in headless mode")
 				print("Press Enter after you have successfully logged in and can see the dashboard")
 				input()
 		
+		time.sleep(1)  # wait for redirect
+		print("Logged in successfully")
 		# Check if logged in and get timeline
-		timeline = check_if_logged_in(driver)
+		timeline = get_timeline(driver)
 		if timeline is not None:
 			return timeline
 		else:
 			print("Login verification failed. Please try again.")
-			return None
+			raise Exception("Login failed!")
 	except Exception as e:
-		print("Error occurred:", e)
+		print(f"Error during login: {e}")
 		if not headless: input("Press Enter to close browser...")
 	finally:
 		driver.quit()
 
-def get_moodle_dealines(headless=True):
+def get_moodle_deadlines(headless=True):
 	soup = moodle_html(headless)
-	dealines = []
+	deadlines = []
 	events = soup.find_all(lambda tag: tag.name == 'div' and
 							('data-region' in tag.attrs and tag['data-region'] == 'event-list-content-date' or
 							'data-region' in tag.attrs and tag['data-region'] == 'event-list-item'))
@@ -110,7 +143,7 @@ def get_moodle_dealines(headless=True):
 		id = link.split("?id=")[1]
 		title = event_.text.strip()
 		course = event.select('small')[1].text.split("·")[1].strip()
-		dealines.append({
+		deadlines.append({
 			"id": id,
 			"time_stamp": time_stamp,
 			"link": link,
@@ -119,7 +152,7 @@ def get_moodle_dealines(headless=True):
 			"due_time": due_time
 		})
 
-	return dealines
+	return deadlines
 
 if __name__ == "__main__":
-	pprint(get_moodle_dealines(headless=False))
+	pprint(get_moodle_deadlines(headless=False))
