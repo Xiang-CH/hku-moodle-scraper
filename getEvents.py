@@ -17,29 +17,6 @@ USERNAME = os.getenv("EMAIL")
 PASSWORD = os.getenv("PORTAL_PIN")
 browserStatePath = os.getcwd() + "/state.json"
 
-def save_session_state(driver, path):
-	state = {
-		'cookies': driver.get_cookies(),
-	}
-	with open(path, 'w') as file:
-		json.dump(state, file)
-
-def load_session_state(driver, path):
-	try:
-		with open(path, 'r') as file:
-			state = json.load(file)
-
-		# Clear existing cookies and storage
-		driver.delete_all_cookies()
-			
-		# Load cookies
-		for cookie in state.get('cookies', []):
-			driver.add_cookie(cookie)
-			
-		return True
-	except (FileNotFoundError, Exception) as e:
-		# print(e)
-		return False
 
 def check_if_logged_in(driver):
 	try:
@@ -53,7 +30,6 @@ def check_if_logged_in(driver):
 		)
 		pg_data = driver.find_element(By.CSS_SELECTOR, 'div[data-region="event-list-content"]').get_attribute('innerHTML')
 		print("Login verification successful")
-		save_session_state(driver, browserStatePath)
 		return BeautifulSoup(pg_data, 'html.parser')
 	except (NoSuchElementException, TimeoutException):
 		return None
@@ -67,10 +43,6 @@ def moodle_html(headless=False):
 	
 	try:
 		driver.get(URL)
-		if not load_session_state(driver, browserStatePath):
-			print("No session state found")
-		else:
-			print("Session state loaded")
 
 		# Refresh page to load session
 		driver.refresh()
